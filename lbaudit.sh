@@ -16,6 +16,7 @@ echo -en "${OFFSET}[${RED}FAILED${NC}]";
 }
 STEP_OK=0
 step() {
+    STEP_NAME="$@"
     echo -n -e "$@"
     echo -e "#########################################################################" >> $LOG
     echo -e "STEP -  $@" >> $LOG
@@ -38,20 +39,28 @@ logx(){
 	echo "---------------------" &>> $LOG
 	"$@" &>> $LOG
 }
+PASSLIST=""
+PASSCOUNT=0
 setpass(){
-STEP_OK=0
+	PASSLIST="$PASSLIST\n${STEP_NAME}"
+	let PASSCOUNT=PASSCOUNT+1
+	STEP_OK=0
 }
+FAILLIST=""
+FAILCOUNT=0
 setfail(){
-STEP_OK=1
+	FAILLIST="${FAILLIST}\n${STEP_NAME}"
+	let FAILCOUNT=FAILCOUNT+1
+	STEP_OK=1
 }
 
 ###########################################################################
 #######                Start of script                             ########
 ###########################################################################
-hostname=`hostname`
-OUTFILE="lbaudit-$hostname.tgz"
-LOG="lbaudit-$hostname.log"
-
+hostname=`hostname -s`
+OUTFILE="lbaudit_${hostname}.tgz"
+LOG="lbaudit_${hostname}.log"
+SUMMERYLOG="lbaudit-summery_${hostname}.log"
 TMPPATH="/var/tmp/lbaudit"
 
 starttime=`date +"%Y-%m-%d_%H-%M-%S"`
@@ -195,7 +204,21 @@ logx sysctl -A | grep .rp_filter
 	fi
 next;
 echo "----------------------------------------------------------------------------" &>> $LOG
-step "     check chronyd NTP"
+step "     check NTP enabled/synchronized"
+logx timedatectl
+	NTPENB=$(timedatectl | awk '/NTP enabled:/ {print $NF} ')
+	NTPSYNC=$(timedatectl | awk '/NTP synchronized:/ {print $NF} ')
+	NTPCHECK="${NTPENB}${NTPSYNC}";
+	if grep -q 'yesyes' <<<$NTPCHECK; 
+	then
+		setpass
+	else
+		echo -en "\033[70GEnabled=${NTPENB} Synchronized=${NTPSYNC}"
+		setfail
+	fi
+next
+echo "----------------------------------------------------------------------------" &>> $LOG
+step "     check chronyd status"
 logx chronyc tracking 
 	if systemctl status chronyd | grep Active | grep running &>> $LOG ; 
 	then
@@ -204,6 +227,99 @@ logx chronyc tracking
 		setfail
 	fi
 next
+echo "----------------------------------------------------------------------------" &>> $LOG
+step "     timezone settings"
+logx ls -al /etc/localtime
+logx 
+	if systemctl status chronyd | grep Active | grep running &>> $LOG ; 
+	then
+		setpass
+	else
+		setfail
+	fi
+next
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Firewall settings"
+step "     firewalld disabled"
+	logx systemctl status firewalld
+	if systemctl status firewalld | grep -vP 'Active: inactive' &>> $LOG ; 
+	then
+		setpass
+	else
+		logx systemctl
+		echo -en "\033[70GEnabled-manually confirm exclusions"
+		setfail
+	fi
+	next;
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Network settings"
+	logx ip a
+	IPADDRS=$(ip addr show | perl -n -e '/inet (.*)\// && print "$1 "') 
+	ADDRCOUNT=$(echo ${IPADDRS} | wc  -w );
+	INTERFACELIST=$(ip addr show | perl -n -e '/.*: (.*?):.*qdisc/ && print "$1 "')
+	INTERFACECOUNT=$(echo ${INTERFACELIST} | wc  -w );
+	step "     interfaces count >2"
+	if [ ${INTERFACECOUNT} -ge 2 ]
+	then
+		setpass
+	else
+		setfail
+		echo -en "\033[70G$INTERFACECOUNT interfaces found"
+	fi 
+	next;
+	step "     ipv4 address count >2"
+	if [ ${ADDRCOUNT} -ge 2 ]
+	then
+		setpass
+	else
+		setfail
+		echo -en "\033[70G$ADDRCOUNT ip addr found"
+	fi 
+	next;
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Installed Packages"
+PACKAGELIST="vim wget unzip expect nmap nc net-tools net-snmp net-snmp-libs net-snmp-utils "
+for PACKAGE in $PACKAGELIST
+do
+	step "     ${PACKAGE}"
+	RESULT=$(yum -q list installed | grep ${PACKAGE} &>/dev/null &&  echo ${PACKAGE} is INSTALLED || echo ${PACKAGE} is NOT INSTALLED)
+	if grep -q NOT <<<$RESULT; 
+	then
+		setfail
+	else
+		setpass
+	fi
+	next;
+done
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "CHecking JAVA Installation"
+step "    JAVA version"
+	if [ -e /etc/sysconfig/nst-loadbalancer.properties ];
+	then
+		JAVAVER=$(`grep java /etc/sysconfig/nst-loadbalancer.properties | awk -F"=" '/JAVA_EXE=(.*)/ {print $2;}'` -version 2>&1| grep version | awk '{print $NF}')
+	else
+		JAVAVER=$(ls /opt | awk '/j(dk|re)/')
+	fi
+ 	log $JAVAVER
+	if grep -q 1.8 <<< $JAVAVER ; then setpass; else setfail; echo -en "\033[70Gversion 1.8 required"; fi
+	next;
+
+step "     JAVA build"
+	BUILD=$(echo $JAVAVER  | sed 's/"//g' | awk -F"_"  '{print $2}')
+	if [ $BUILD -ge 90 ] ; then setpass; else setfail; fi
+
 echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -227,48 +343,93 @@ echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-echo "Checking Installed Packages"
-PACKAGELIST="vim wget unzip expect nmap nmap nc net-tools net-snmp net-snmp-libs net-snmp-utils "
-for PACKAGE in $PACKAGELIST
-do
-	step "     ${PACKAGE}"
-	RESULT=$(yum -q list installed | grep ${PACKAGE} &>/dev/null &&  echo ${PACKAGE} is INSTALLED || echo ${PACKAGE} is NOT INSTALLED)
-	if grep -q NOT <<<$RESULT; 
-	then
-		setfail
-	else
-		setpass
-	fi
-	next;
-done
+echo "Checking LB Properties Configuration"
+	PROPFILE='/etc/sysconfig/nst-loadbalancer.properties'
+	step "     Finding Properties file "
+	logx cat ${PROPFILE}
+	[ -e ${PROPFILE} ] && setpass || setfail ;
+	next
+	step "     Checking Install Path "
+	LBDIR=$(awk -F"=" '/INSTALL_DIR/ {print $2}' $PROPFILE)
+	[ -d ${LBDIR} ] && setpass || setfail ;
+	next
+	step "     Checking Java Path"
+	JAVAEXE=$(awk -F"=" '/JAVA_EXE/ {print $2}' $PROPFILE)
+	[ -e ${JAVAEXE} ] && setpass || setfail ;
+	next
+	step "     Checking ClusterID "
+	CLUSTERID=$(awk -F"=" '/clusterId/ {print $2}' $PROPFILE)
+	[ $CLUSTERID != '' ] && setpass || setfail ;
+	next
+	step "     Checking JMX Hostname "
+	JMXHOST=$(awk -F"=" '/jmxHostname/ {print $2}' $PROPFILE)
+	if grep -q $JMXHOST <<<$IPADDRS ; then setpass ; else setfail ;fi
+	next
+	step "     Checking JMX PORT"
+	JMXPORT=$(awk -F"=" '/jmxRemotePort/ {print $2}' $PROPFILE)
+	if netstat -aneop | grep -q ${JMXPORT}   ; then setpass; else setfail ;fi
+	next
 echo
-log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-step "Checking JAVA version"
-JAVAVER=$(`grep java /etc/sysconfig/nst-load* | awk -F"=" '/JAVA_EXE=(.*)/ {print $2;}'` -version 2>&1| grep version | awk '{print $NF}')
- 	log $JAVAVER
-	if grep -q 1.8 <<< $JAVAVER ;
-	then
-		BUILD=$(echo $JAVAVER | echo '"1.8.0_121"' | sed 's/"//g' | awk -F"_"  '{print $2}')
-		if [ $BUILD -ge 90 ] ;
-		then
-			setpass
-		else
-			setfail
-		fi
-	else
-		setfail
-		echo -en "\033[70Gversion 1.8 required"
-	fi
-	next;
+echo "Checking LB VIP-Manager Properties Configuration"
+	VIPPROPFILE='/etc/sysconfig/nst-vip-manager.properties'
+	step "     Finding Vip-manager Properties file "
+	logx cat ${VIPPROPFILE}
+	[ -e ${VIPPROPFILE} ] && setpass || setfail ;
+	next
+	step "     Checking Vip-manager Java Path"
+	VIPJAVAEXE=$(awk -F"=" '/JAVA_EXE/ {print $2}' $VIPPROPFILE)
+	[ -e ${VIPJAVAEXE} ] && setpass || setfail ;
+	next
+	step "     Checking Vip-manager JMX Hostname "
+	VIPJMXHOST=$(awk -F"=" '/jgroupsBindAddress/ {print $2}' $VIPPROPFILE)
+	if grep -q $VIPJMXHOST <<<$IPADDRS ; then setpass ; else setfail ;fi
+	next
+	step "     Checking Vip-manager JMX PORT"
+	VIPJMXPORT=$(awk -F"=" '/jmxRemotePort/ {print $2}' $VIPPROPFILE)
+	if netstat -aneop | grep -q ${VIPJMXPORT}   ; then setpass; else setfail ;fi
+	next
+echo
+echo "Checking LB Bootstrap Config"
+	BSCFG="${LBDIR}/nst-bootstrap-config.xml"
+	step "     finding bootstrap config "
+	[ -e ${LBDIR} ] && setpass || setfail ;
+	next
+	\cp -f ${BSCFG} ./copy-nst-bootstrap-config.xml
+	BSCFG="./copy-nst-bootstrap-config.xml"
+	sed -i 's/xmlns=".*"/ /g' $BSCFG
+	step "     checking hostname ip is on system"
+	XMLHOSTNAME=$(xmllint --xpath '/nst-bootstrap/config/hostname/text()' ${BSCFG})
+	if grep -q $XMLHOSTNAME <<<$IPADDRS ; then setpass; else setfail ;fi
+	next
+	step "     checking Local JMX bind address"
+	XMLJMXBIND=$(xmllint --xpath '/nst-bootstrap/config/jmx-bind-address/text()' ${BSCFG})
+	XMLJMXBINDHOST=$(echo $XMLJMXBIND | awk -F":" '{print $1}')
+	XMLJMXBINDPORT=$(echo $XMLJMXBIND | awk -F":" '{print $2}')
+	STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} 2> /dev/null | awk '/\/tcp/ {print $2}'  )
+	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	next
+	step "     checking Remote JMX host"
+	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
+	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
+	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	next
+	step "     checking Interfaces are present"
+	XMSINTERFACES=$(grep -P '<interface>' ${BSCFG} | awk -F"<|>" '{print $3}' | uniq)
+	FOUNDBAD=0
+	for INTERFACE in $XMSINTERFACES 
+	do
+		if grep -q $INTERFACE <<<$INTERFACELIST; then echo $INTERFACE OK &>>$LOG ; else let FOUNDBAD=FOUNDBAD+1 ; fi
+	done
+	next
+#TODO- Try and test the actual JMX Connection	
 
 echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 echo "Gathering Additional Information"
-step "    Basic System Information"
+step "     Basic System Information"
 logx hostname
 logx hostnamectl
 logx cat /etc/system-release
@@ -280,10 +441,10 @@ logx df -h
 logx ip a
 logx curl http://127.0.0.1:10080/system
 logx cat /proc/meminfo
-
+logx timedatectl
 next
 
-step "   Network Configuration"
+step "     Network Configuration"
 logx ifconfig
 logx ifconfig -a
 logx ip a
@@ -336,7 +497,11 @@ logx uname -a
 next
 echo
 
-
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo -e "Audit of ${hostname} @ $starttime \n${PASSCOUNT} Passed:\n${PASSLIST}\n${FAILCOUNT} Failed:\n${FAILLIST}" > ${SUMMERYLOG}
+cat ${SUMMERYLOG} >> $LOG
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -347,6 +512,10 @@ echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-echo "Audit complete, see $LOG for details"
-logger -t SCRIPT  "Audit complete, see $LOG for details"
+echo "Audit complete! "
+echo -e "   ${GREEN}$PASSCOUNT checks Passed${NC}"
+echo -e "   ${RED}$FAILCOUNT checks Failed${NC}"
+echo "Results saved to $SUMMERYLOG, "
+echo "   see $LOG for full details"
+logger -t SCRIPT  "Audit complete $PASSCOUNT Passed, $FAILCOUNT Failed, See $LOG for details"
 echo
