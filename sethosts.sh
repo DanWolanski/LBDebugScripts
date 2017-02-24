@@ -1,7 +1,7 @@
 # Script to setup network and hostname
 
 # Defines
-myHostName=$(hostname)
+myHostName=$(hostname -s)
 myFQDN=""
 if [ $# -eq 1 ]; then
 	myHostName=$1
@@ -21,6 +21,7 @@ __EOF
 #updating the hostname to BASE adress
 
 echo "${myHostName}" > /etc/hostname
+hostnamectl set-hostname ${myHostName}
 
 echo "/etc/hostname set to:"
 cat /etc/hostname

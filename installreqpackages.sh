@@ -1,36 +1,48 @@
 #!/bin/bash
-# This script will install the packages that are needed for the mrb
-
+# This script will install the packages that are needed for the lb
+if [ -e "/etc/init.d/functions" ];
+then
 . /etc/init.d/functions
-starttime=`date +"%Y-%m-%d_%H-%M-%S"`
-LOG="packageinstall.log"
-if [ $# -eq 1 ]; then
-	OUTFILE=$1
-fi
+else
 # Use step(), try(), and next() to perform a series of commands and print
 # [  OK  ] or [FAILED] at the end. The step as a whole fails if any individual
 # command fails.
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+OFFSET='\033[60G'
+echo_success(){
+  echo -en \\033
+  echo -en "${OFFSET}${GREEN}[OK]${NC}";
+}
+echo_failure(){
+echo -en "${OFFSET}${RED}[FAIL]${NC}";
+}
+fi
 step() {
     echo -n -e "$@"
-    echo -e "\n\nSTEP -  $@"&>> $LOG
+    echo -e "\n\nSTEP -  $@" >> $LOG
     STEP_OK=0
-    [[ -w /tmp ]] && echo $STEP_OK > /tmp/step.$$
 }
 next() {
-    [[ -f /tmp/step.$$ ]] && { STEP_OK=$(< /tmp/step.$$); rm -f /tmp/step.$$; }
     [[ $STEP_OK -eq 0 ]]  && echo_success || echo_failure
     echo
-
+    echo -e "STEP result">> $LOG
+    echo -e "#########################################################################" >> $LOG
     return $STEP_OK
 }
-setpass() {
-    echo -n "$@"
-    STEP_OK=0
-    [[ -w /tmp ]] && echo $STEP_OK > /tmp/step.$$
-}
+###########################################################################
+#######                Start of script                             ########
+###########################################################################
+LOG="packageinstall.log"
+starttime=`date +"%Y-%m-%d_%H-%M-%S"`
+
+echo "Dependency Install started at ${starttime}" > $LOG
+logger -t SCRIPT  "Installing LB Packages via $0"
+
 
 echo "Basic Packages"
-PACKAGELIST="vim wget unzip net-snmp net-snmp-libs net-snmp-utils net-tools expect nmap"
+PACKAGELIST="vim wget unzip expect nmap "
 for PACKAGE in $PACKAGELIST
 do
 	step "    Installing $PACKAGE"
@@ -38,9 +50,8 @@ do
 	next;
 done
 
-echo "MRB w/ Proxy enabled packages"
-
-PACKAGELIST="epel-release glib2-devel glibc-devel zlib-devel openssl-devel pcre-devel libcurl-devel xmlrpc-c xmlrpc-c-devel iptables-devel gcc kernel-devel hiredis hiredis-devel"
+echo "LB Package Dependencies"
+PACKAGELIST="nmap nc net-tools "
 for PACKAGE in $PACKAGELIST
 do
 	step "    Installing $PACKAGE"
@@ -48,9 +59,26 @@ do
 	next;
 done
 
+echo "SNMP Packages"
+PACKAGELIST="net-snmp net-snmp-libs net-snmp-utils"
+for PACKAGE in $PACKAGELIST
+do
+	step "    Installing $PACKAGE"
+	yum -y install $PACKAGE &>> $LOG
+	next;
+done
+
+echo
 step "Updating the kernel via yum"
 yum -y update kernel &>> $LOG
-next
+next;
+
+#step "Performing yum update"
+#yum -y update &>> $LOG
+#next;
+echo
 echo "Note- kernel update requires a system restart"
 echo
 echo "Process complete, see $LOG for details"
+logger -t SCRIPT  "Install complete, see $LOG for details"
+
