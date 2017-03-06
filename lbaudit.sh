@@ -287,7 +287,7 @@ log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 echo "Checking Installed Packages"
-PACKAGELIST="vim wget unzip expect nmap nc net-tools net-snmp net-snmp-libs net-snmp-utils "
+PACKAGELIST="vim wget unzip expect nmap nc abrt tcpdump perl net-tools net-snmp net-snmp-libs net-snmp-utils "
 for PACKAGE in $PACKAGELIST
 do
 	step "     ${PACKAGE}"
