@@ -464,9 +464,10 @@ echo "Checking LB Configured Services"
 		step "     Inbound Vip"
 		if grep -q $SLOCALADDRA <<<$IPADDRS ; then setpass; else setfail ;fi
 		next
-		step "     Outbound Vip"
-		if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
-		next
+		#TODO Not all protocols have outbounds. 
+		#step "     Outbound Vip"
+		#if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
+		#next
 		step "     Local JMX"
 		STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
 		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
