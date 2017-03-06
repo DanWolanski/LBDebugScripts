@@ -324,8 +324,8 @@ echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-echo "Checking LB Services Status"
-log "Checking LB Process Status"
+echo "Checking LB OS Services Status"
+log "Checking LB OS Process Status"
 SERVICELIST="nst-loadbalancer nst-vip-manager jetty"
 for SERVICE in $SERVICELIST
 do
@@ -405,10 +405,12 @@ echo "Checking LB Bootstrap Config"
 	XMLJMXBIND=$(xmllint --xpath '/nst-bootstrap/config/jmx-bind-address/text()' ${BSCFG})
 	XMLJMXBINDHOST=$(echo $XMLJMXBIND | awk -F":" '{print $1}')
 	XMLJMXBINDPORT=$(echo $XMLJMXBIND | awk -F":" '{print $2}')
-	STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} 2> /dev/null | awk '/\/tcp/ {print $2}'  )
-	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	#TODO - This is better test but seems to take a long time so substituting for simple netstat
+	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} 2> /dev/null | awk '/\/tcp/ {print $2}'  )
+	#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	if netstat -aneop | grep -q ${XMLJMXBINDPORT}   ; then setpass; else setfail ;fi
 	next
-	step "     checking Remote JMX host"
+	step "     checking Remote JMX host "
 	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
 	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
 	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
@@ -422,9 +424,68 @@ echo "Checking LB Bootstrap Config"
 		if grep -q $INTERFACE <<<$INTERFACELIST; then echo $INTERFACE OK &>>$LOG ; else let FOUNDBAD=FOUNDBAD+1 ; fi
 	done
 	next
-#TODO- Try and test the actual JMX Connection	
+
+echo "Checking Jetty Configuration"
+	LBWEB='http://127.0.0.1:8888/lb/Login.jsf'
+	LBWEBFAILSEARCH='(errorMessage|Connection refusted)'
+	
+	#TODO , search the actual config to find what interface
+	step "     Checking localhost address "
+	if ping -c 1 -i 0.5 localhost   &>> $LOG; then setpass; else setfail; fi
+	next
+	step "     Checking Jetty PORT"
+	JETTYPORT='8888'
+	if netstat -aneop | grep -q ${JETTYPORT}   ; then setpass; else setfail ;fi
+	next
+	step "     Checking Web Connectivity"
+	if curl -vs http://127.0.0.1:8888/lb/Login.jsf 2>&1 | grep -P &> /dev/null'(Lost connection|Connection refused)';
+	then setfail; else setpass; fi
+	next
+
+echo "Checking LB Configured Services"
+	#TODO Auto Parse to find what is configured
+	SERVICEDIRS="p1 p2 p3 p4 p5 p6 p7 p8 p9 p10"
+	for SERVICEDIR in  $SERVICEDIRS;
+		do
+		
+		if [ -d "$LBDIR/$SERVICEDIR" ]; then
+		SNAME=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/name/text()' -) ;
+		SLOCALADDRA=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/local-address-A/text()' -) ;
+		SLOCALADDRB=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/local-address-B/text()' -) ;
+		SPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/servicePort/text()' -) ;
+		SJMXADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/jmx-bind-address/text()' - | awk -F":" '{print $1}') ;
+		SJMXPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/jmx-bind-address/text()' - | awk -F":" '{print $2}') ;
+		SJMXREMOTEADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' -  | awk -F":" '{print $1}') ;
+		SJMXREMOTEPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' - | awk -F":" '{print $2}') ;
+		echo " -- ${SNAME} --"
+		step "     Service Port"
+		if netstat -aneop | grep -q ${SPORT}   ; then setpass; else setfail ;fi
+		next
+		step "     Inbound Vip"
+		if grep -q $SLOCALADDRA <<<$IPADDRS ; then setpass; else setfail ;fi
+		next
+		step "     Outbound Vip"
+		if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
+		next
+		step "     Local JMX"
+		STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		next
+		step "     Remote JMX"
+		STATE=$(nmap -O ${SJMXREMOTEADDR} -p ${SJMXREMOTEPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		next
+		#TODO Using Test Script to test service.
+		#step "     Testing Service"
+		#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		#next
+		fi
+	done
+	
+	
 
 echo
+
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -439,7 +500,6 @@ logx lscpu
 logx free -ml
 logx df -h
 logx ip a
-logx curl http://127.0.0.1:10080/system
 logx cat /proc/meminfo
 logx timedatectl
 next
