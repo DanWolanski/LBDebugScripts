@@ -230,8 +230,17 @@ next
 echo "----------------------------------------------------------------------------" &>> $LOG
 step "     timezone settings"
 logx ls -al /etc/localtime
-logx 
 	if systemctl status chronyd | grep Active | grep running &>> $LOG ; 
+	then
+		setpass
+	else
+		setfail
+	fi
+next
+echo "----------------------------------------------------------------------------" &>> $LOG
+step "     UDP iptables rule"
+logx iptables --list -t raw
+	if iptables --list -t raw | grep -q -P "CT.*udp.*CT.notrack" &>> $LOG ;
 	then
 		setpass
 	else
@@ -406,14 +415,14 @@ echo "Checking LB Bootstrap Config"
 	XMLJMXBINDHOST=$(echo $XMLJMXBIND | awk -F":" '{print $1}')
 	XMLJMXBINDPORT=$(echo $XMLJMXBIND | awk -F":" '{print $2}')
 	#TODO - This is better test but seems to take a long time so substituting for simple netstat
-	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} 2> /dev/null | awk '/\/tcp/ {print $2}'  )
+	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}'  )
 	#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 	if netstat -aneop | grep -q ${XMLJMXBINDPORT}   ; then setpass; else setfail ;fi
 	next
 	step "     checking Remote JMX host "
 	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
 	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
-	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 	next
 	step "     checking Interfaces are present"
@@ -457,7 +466,7 @@ echo "Checking LB Configured Services"
 		SJMXPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/jmx-bind-address/text()' - | awk -F":" '{print $2}') ;
 		SJMXREMOTEADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' -  | awk -F":" '{print $1}') ;
 		SJMXREMOTEPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' - | awk -F":" '{print $2}') ;
-		echo " -- ${SNAME} --"
+		echo "  -${SNAME}"
 		step "     Service Port"
 		if netstat -aneop | grep -q ${SPORT}   ; then setpass; else setfail ;fi
 		next
@@ -469,11 +478,12 @@ echo "Checking LB Configured Services"
 		#if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
 		#next
 		step "     Local JMX"
-		STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
-		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		#STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		if netstat -aneop | grep -q ${SJMXPORT}   ; then setpass; else setfail ;fi
 		next
 		step "     Remote JMX"
-		STATE=$(nmap -O ${SJMXREMOTEADDR} -p ${SJMXREMOTEPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		STATE=$(nmap -O ${SJMXREMOTEADDR} -p ${SJMXREMOTEPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 		next
 		#TODO Using Test Script to test service.
