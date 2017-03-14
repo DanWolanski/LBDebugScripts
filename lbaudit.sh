@@ -314,8 +314,13 @@ echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+<<<<<<< HEAD
 echo "Checking Recommended Packages"
 PACKAGELIST="vim wget unzip expect omping sysstat "
+=======
+echo "Checking Installed Packages"
+PACKAGELIST="vim wget unzip expect nmap nc abrt tcpdump perl net-tools net-snmp net-snmp-libs net-snmp-utils "
+>>>>>>> origin/master
 for PACKAGE in $PACKAGELIST
 do
 	step "     ${PACKAGE}"
@@ -444,6 +449,7 @@ echo "Checking LB Bootstrap Config"
 	XMLJMXBIND=$(xmllint --xpath '/nst-bootstrap/config/jmx-bind-address/text()' ${BSCFG})
 	XMLJMXBINDHOST=$(echo $XMLJMXBIND | awk -F":" '{print $1}')
 	XMLJMXBINDPORT=$(echo $XMLJMXBIND | awk -F":" '{print $2}')
+<<<<<<< HEAD
 	step "     checking Local JMX bind (${XMLJMXBINDHOST}:${XMLJMXBINDPORT})"
 	#TODO - This is better test but seems to take a long time so substituting for simple netstat
 	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}'  )
@@ -453,6 +459,16 @@ echo "Checking LB Bootstrap Config"
 	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
 	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
 	step "     checking Remote JMX host (${XMLPAIRHOST}:${XMLPAIRPORT})"
+=======
+	#TODO - This is better test but seems to take a long time so substituting for simple netstat
+	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}'  )
+	#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	if netstat -aneop | grep -q ${XMLJMXBINDPORT}   ; then setpass; else setfail ;fi
+	next
+	step "     checking Remote JMX host "
+	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
+	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
+>>>>>>> origin/master
 	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 	next
@@ -464,10 +480,14 @@ echo "Checking LB Bootstrap Config"
 		if grep -q $INTERFACE <<<$INTERFACELIST; then echo $INTERFACE OK &>>$LOG ; else let FOUNDBAD=FOUNDBAD+1 ; fi
 	done
 	next
+<<<<<<< HEAD
 echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+=======
+
+>>>>>>> origin/master
 echo "Checking Jetty Configuration"
 	LBWEB='http://127.0.0.1:8888/lb/Login.jsf'
 	LBWEBFAILSEARCH='(errorMessage|Connection refusted)'
@@ -484,10 +504,14 @@ echo "Checking Jetty Configuration"
 	if curl -vs http://127.0.0.1:8888/lb/Login.jsf 2>&1 | grep -P &> /dev/null'(Lost connection|Connection refused)';
 	then setfail; else setpass; fi
 	next
+<<<<<<< HEAD
 echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+=======
+
+>>>>>>> origin/master
 echo "Checking LB Configured Services"
 	#TODO Auto Parse to find what is configured
 	SERVICEDIRS="p1 p2 p3 p4 p5 p6 p7 p8 p9 p10"
@@ -504,22 +528,37 @@ echo "Checking LB Configured Services"
 		SJMXREMOTEADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' -  | awk -F":" '{print $1}') ;
 		SJMXREMOTEPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' - | awk -F":" '{print $2}') ;
 		echo "  -${SNAME}"
+<<<<<<< HEAD
 		step "     Service Port (${SPORT})"
 		if netstat -aneop | grep -q ${SPORT}   ; then setpass; else setfail ;fi
 		next
 		step "     Inbound Vip (${SLOCALADDRA})"
+=======
+		step "     Service Port"
+		if netstat -aneop | grep -q ${SPORT}   ; then setpass; else setfail ;fi
+		next
+		step "     Inbound Vip"
+>>>>>>> origin/master
 		if grep -q $SLOCALADDRA <<<$IPADDRS ; then setpass; else setfail ;fi
 		next
 		#TODO Not all protocols have outbounds. 
 		#step "     Outbound Vip"
 		#if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
 		#next
+<<<<<<< HEAD
 		step "     Local JMX Port (${SJMXPORT})"
+=======
+		step "     Local JMX"
+>>>>>>> origin/master
 		#STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 		#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 		if netstat -aneop | grep -q ${SJMXPORT}   ; then setpass; else setfail ;fi
 		next
+<<<<<<< HEAD
 		step "     Remote JMX IP/Port (${SJMXREMOTEADDR}:${SJMXREMOTEPORT})"
+=======
+		step "     Remote JMX"
+>>>>>>> origin/master
 		STATE=$(nmap -O ${SJMXREMOTEADDR} -p ${SJMXREMOTEPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 		next
@@ -530,6 +569,7 @@ echo "Checking LB Configured Services"
 		fi
 	done
 	
+<<<<<<< HEAD
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -553,6 +593,9 @@ echo "Checking Network Multicast settings"
 		echo -en "\033[70G$ADDRCOUNT ip addr found"
 	fi 
 	next;
+=======
+	
+>>>>>>> origin/master
 
 echo
 

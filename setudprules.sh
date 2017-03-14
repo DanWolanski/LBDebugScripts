@@ -39,17 +39,26 @@ step "Saving iptables rules"
 iptables-save > /etc/iptables.save
 echo_success
 
+<<<<<<< HEAD
 step "Adding rule to rc.local start script" 
 cat << __EOF >> /etc/rc.local
 # Add in load of rules for LB
 logger -t "rc.local" "enabling iptables udp notrack rule"
+=======
+step "Setting load on reboot" 
+cat << __EOF >> /etc/rc.local
+# Add in load of rules for LB
+>>>>>>> origin/master
 /sbin/iptables-restore < /etc/iptables.save
 __EOF
 try grep iptables-restore /etc/rc.local
 
+<<<<<<< HEAD
 step "Enabling rc.local to start on boot"
 try chmod a+x /etc/rc.local
 
+=======
+>>>>>>> origin/master
 echo
 echo "Process Complete"
 

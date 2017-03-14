@@ -42,7 +42,11 @@ logger -t SCRIPT  "Installing LB Packages via $0"
 
 
 echo "Basic Packages"
+<<<<<<< HEAD
 PACKAGELIST="vim wget unzip expect nmap abrt tcpdump omping sysstat"
+=======
+PACKAGELIST="vim wget unzip expect nmap abrt tcpdump"
+>>>>>>> origin/master
 for PACKAGE in $PACKAGELIST
 do
 	step "    Installing $PACKAGE"
