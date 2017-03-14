@@ -86,7 +86,8 @@ try . ./setprofile.sh
 
 cd ${STARTPWD}
 
-logger -t "lbsysinit.sh" "lbsysinit.sh script Initilization complete"
+logger -t "lbsysinit.sh" "lbsysinit.sh script Initilization complete. see ${LOG} for details"
+
 echo
 echo "Process Complete!!
 echo "  see ${LOG} for more details"
