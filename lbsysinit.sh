@@ -14,14 +14,16 @@ OFFSET='\033[60G'
 echo_success(){
   echo -en \\033
   echo -en "${OFFSET}[  ${GREEN}OK${NC}  ]\n";
+  echo "**** Step SUCCESS ****" >> $LOG
 }
 echo_failure(){
 echo -en "${OFFSET}[${RED}FAILED${NC}]\n";
+echo "**** Step FAILURE ****" >> $LOG
 }
 step() {
-	echo "==========================================================================================="
-	echo "====   $@"
-	echo "==========================================================================================="
+	echo "===========================================================================================" >> $LOG
+	echo "====   Step - $@" >> $LOG
+	echo "===========================================================================================" >> $LOG
     echo -n -e "$@"
 }
 try (){
@@ -89,8 +91,8 @@ cd ${STARTPWD}
 logger -t "lbsysinit.sh" "lbsysinit.sh script Initilization complete. see ${LOG} for details"
 
 echo
-echo "Process Complete!!
-echo "  see ${LOG} for more details"
+echo "Process Complete!!"
+echo -e "  ${GREEN}see ${LOG} for more details${NC}"
 echo -e "${RED}Please Reboot before installing the LB Package${NC}"
 echo
 
