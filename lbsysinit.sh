@@ -19,6 +19,9 @@ echo_failure(){
 echo -en "${OFFSET}[${RED}FAILED${NC}]\n";
 }
 step() {
+	echo "==========================================================================================="
+	echo "====   $@"
+	echo "==========================================================================================="
     echo -n -e "$@"
 }
 try (){
@@ -61,7 +64,7 @@ step "Disabling rp_filter (disablerpfilter.sh)"
 
 step  "Disabling selinux (disableselinux.sh)"
 try ./disableselinux.sh
-
+ 
 step  "Adding udp iptables rule (setudprules.sh)"
 try ./setudprules.sh
 
@@ -85,7 +88,8 @@ cd ${STARTPWD}
 
 logger -t "lbsysinit.sh" "lbsysinit.sh script Initilization complete"
 echo
-echo "Process Complete, see ${LOG} for more details"
+echo "Process Complete!!
+echo "  see ${LOG} for more details"
 echo -e "${RED}Please Reboot before installing the LB Package${NC}"
 echo
 
