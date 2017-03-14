@@ -42,7 +42,7 @@ logger -t SCRIPT  "Installing LB Packages via $0"
 
 
 echo "Basic Packages"
-PACKAGELIST="vim wget unzip expect nmap "
+PACKAGELIST="vim wget unzip expect nmap abrt tcpdump omping sysstat"
 for PACKAGE in $PACKAGELIST
 do
 	step "    Installing $PACKAGE"
@@ -51,7 +51,7 @@ do
 done
 
 echo "LB Package Dependencies"
-PACKAGELIST="nmap nc net-tools "
+PACKAGELIST="nmap nc net-tools perl"
 for PACKAGE in $PACKAGELIST
 do
 	step "    Installing $PACKAGE"

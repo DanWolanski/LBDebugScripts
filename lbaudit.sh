@@ -230,8 +230,17 @@ next
 echo "----------------------------------------------------------------------------" &>> $LOG
 step "     timezone settings"
 logx ls -al /etc/localtime
-logx 
 	if systemctl status chronyd | grep Active | grep running &>> $LOG ; 
+	then
+		setpass
+	else
+		setfail
+	fi
+next
+echo "----------------------------------------------------------------------------" &>> $LOG
+step "     UDP iptables rule"
+logx iptables --list -t raw
+	if iptables --list -t raw | grep -q -P "CT.*udp.*CT.notrack" &>> $LOG ;
 	then
 		setpass
 	else
@@ -283,11 +292,30 @@ echo "Checking Network settings"
 	fi 
 	next;
 echo
+
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-echo "Checking Installed Packages"
-PACKAGELIST="vim wget unzip expect nmap nc net-tools net-snmp net-snmp-libs net-snmp-utils "
+echo "Checking Required Packages"
+PACKAGELIST="nmap nc abrt tcpdump perl net-tools net-snmp net-snmp-libs net-snmp-utils "
+for PACKAGE in $PACKAGELIST
+do
+	step "     ${PACKAGE}"
+	RESULT=$(yum -q list installed | grep ${PACKAGE} &>/dev/null &&  echo ${PACKAGE} is INSTALLED || echo ${PACKAGE} is NOT INSTALLED)
+	if grep -q NOT <<<$RESULT; 
+	then
+		setfail
+	else
+		setpass
+	fi
+	next;
+done
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Recommended Packages"
+PACKAGELIST="vim wget unzip expect omping sysstat "
 for PACKAGE in $PACKAGELIST
 do
 	step "     ${PACKAGE}"
@@ -305,7 +333,7 @@ log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 echo "CHecking JAVA Installation"
-step "    JAVA version"
+step "    JAVA version 1.8"
 	if [ -e /etc/sysconfig/nst-loadbalancer.properties ];
 	then
 		JAVAVER=$(`grep java /etc/sysconfig/nst-loadbalancer.properties | awk -F"=" '/JAVA_EXE=(.*)/ {print $2;}'` -version 2>&1| grep version | awk '{print $NF}')
@@ -316,7 +344,7 @@ step "    JAVA version"
 	if grep -q 1.8 <<< $JAVAVER ; then setpass; else setfail; echo -en "\033[70Gversion 1.8 required"; fi
 	next;
 
-step "     JAVA build"
+step "     JAVA build >90"
 	BUILD=$(echo $JAVAVER  | sed 's/"//g' | awk -F"_"  '{print $2}')
 	if [ $BUILD -ge 90 ] ; then setpass; else setfail; fi
 
@@ -324,8 +352,8 @@ echo
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-echo "Checking LB Services Status"
-log "Checking LB Process Status"
+echo "Checking LB OS Services Status"
+log "Checking LB OS Process Status"
 SERVICELIST="nst-loadbalancer nst-vip-manager jetty"
 for SERVICE in $SERVICELIST
 do
@@ -369,7 +397,15 @@ echo "Checking LB Properties Configuration"
 	JMXPORT=$(awk -F"=" '/jmxRemotePort/ {print $2}' $PROPFILE)
 	if netstat -aneop | grep -q ${JMXPORT}   ; then setpass; else setfail ;fi
 	next
+	step "     Checking JMX Multicast group"
+	JMXMCAST=$(awk -F"=" '/baseJGroupsMcastAddress/ {print $2}' $PROPFILE)
+	if netstat -ng | grep -q ${JMXMCAST}   ; then setpass; else setfail ;fi
+	next
 echo
+
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 echo "Checking LB VIP-Manager Properties Configuration"
 	VIPPROPFILE='/etc/sysconfig/nst-vip-manager.properties'
 	step "     Finding Vip-manager Properties file "
@@ -389,6 +425,9 @@ echo "Checking LB VIP-Manager Properties Configuration"
 	if netstat -aneop | grep -q ${VIPJMXPORT}   ; then setpass; else setfail ;fi
 	next
 echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 echo "Checking LB Bootstrap Config"
 	BSCFG="${LBDIR}/nst-bootstrap-config.xml"
 	step "     finding bootstrap config "
@@ -397,34 +436,126 @@ echo "Checking LB Bootstrap Config"
 	\cp -f ${BSCFG} ./copy-nst-bootstrap-config.xml
 	BSCFG="./copy-nst-bootstrap-config.xml"
 	sed -i 's/xmlns=".*"/ /g' $BSCFG
-	step "     checking hostname ip is on system"
 	XMLHOSTNAME=$(xmllint --xpath '/nst-bootstrap/config/hostname/text()' ${BSCFG})
+	step "     checking hostname ip is on system (${XMLHOSTNAME}) "
 	if grep -q $XMLHOSTNAME <<<$IPADDRS ; then setpass; else setfail ;fi
 	next
-	step "     checking Local JMX bind address"
+	
 	XMLJMXBIND=$(xmllint --xpath '/nst-bootstrap/config/jmx-bind-address/text()' ${BSCFG})
 	XMLJMXBINDHOST=$(echo $XMLJMXBIND | awk -F":" '{print $1}')
 	XMLJMXBINDPORT=$(echo $XMLJMXBIND | awk -F":" '{print $2}')
-	STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} 2> /dev/null | awk '/\/tcp/ {print $2}'  )
-	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	step "     checking Local JMX bind (${XMLJMXBINDHOST}:${XMLJMXBINDPORT})"
+	#TODO - This is better test but seems to take a long time so substituting for simple netstat
+	#STATE=$(nmap -O ${XMLJMXBINDHOST} -p ${XMLJMXBINDPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}'  )
+	#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+	if netstat -aneop | grep -q ${XMLJMXBINDPORT}    ; then setpass; else setfail ;fi
 	next
-	step "     checking Remote JMX host"
 	XMLPAIRHOST=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-hostname/text()' ${BSCFG})
 	XMLPAIRPORT=$(xmllint --xpath '/nst-bootstrap/config/paired-bootstrap-jmx-port/text()' ${BSCFG})
-	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} 2> /dev/null | awk '/\/tcp/ {print $2}' )
+	step "     checking Remote JMX host (${XMLPAIRHOST}:${XMLPAIRPORT})"
+	STATE=$(nmap -O ${XMLPAIRHOST} -p ${XMLPAIRPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
 	if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
 	next
-	step "     checking Interfaces are present"
 	XMSINTERFACES=$(grep -P '<interface>' ${BSCFG} | awk -F"<|>" '{print $3}' | uniq)
+	step "     checking Interfaces are present (${XMSINTERFACES})"
 	FOUNDBAD=0
 	for INTERFACE in $XMSINTERFACES 
 	do
 		if grep -q $INTERFACE <<<$INTERFACELIST; then echo $INTERFACE OK &>>$LOG ; else let FOUNDBAD=FOUNDBAD+1 ; fi
 	done
 	next
-#TODO- Try and test the actual JMX Connection	
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Jetty Configuration"
+	LBWEB='http://127.0.0.1:8888/lb/Login.jsf'
+	LBWEBFAILSEARCH='(errorMessage|Connection refusted)'
+	
+	#TODO , search the actual config to find what interface
+	step "     Checking localhost address "
+	if ping -c 1 -i 0.5 localhost   &>> $LOG; then setpass; else setfail; fi
+	next
+	step "     Checking Jetty PORT"
+	JETTYPORT='8888'
+	if netstat -aneop | grep -q ${JETTYPORT}   ; then setpass; else setfail ;fi
+	next
+	step "     Checking Web Connectivity"
+	if curl -vs http://127.0.0.1:8888/lb/Login.jsf 2>&1 | grep -P &> /dev/null'(Lost connection|Connection refused)';
+	then setfail; else setpass; fi
+	next
+echo
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking LB Configured Services"
+	#TODO Auto Parse to find what is configured
+	SERVICEDIRS="p1 p2 p3 p4 p5 p6 p7 p8 p9 p10"
+	for SERVICEDIR in  $SERVICEDIRS;
+		do
+		
+		if [ -d "$LBDIR/$SERVICEDIR" ]; then
+		SNAME=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/name/text()' -) ;
+		SLOCALADDRA=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/local-address-A/text()' -) ;
+		SLOCALADDRB=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/local-address-B/text()' -) ;
+		SPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/servicePort/text()' -) ;
+		SJMXADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/jmx-bind-address/text()' - | awk -F":" '{print $1}') ;
+		SJMXPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/jmx-bind-address/text()' - | awk -F":" '{print $2}') ;
+		SJMXREMOTEADDR=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' -  | awk -F":" '{print $1}') ;
+		SJMXREMOTEPORT=$(cat ${LBDIR}/${SERVICEDIR}/nst-lb-config.xml |  sed  's/xmlns=".*"/ /g' | xmllint --xpath '/nst-lb/config/other-jmx-address/text()' - | awk -F":" '{print $2}') ;
+		echo "  -${SNAME}"
+		step "     Service Port (${SPORT})"
+		if netstat -aneop | grep -q ${SPORT}   ; then setpass; else setfail ;fi
+		next
+		step "     Inbound Vip (${SLOCALADDRA})"
+		if grep -q $SLOCALADDRA <<<$IPADDRS ; then setpass; else setfail ;fi
+		next
+		#TODO Not all protocols have outbounds. 
+		#step "     Outbound Vip"
+		#if grep -q $SLOCALADDRB <<<$IPADDRS ; then setpass; else setfail ;fi
+		#next
+		step "     Local JMX Port (${SJMXPORT})"
+		#STATE=$(nmap -O ${SJMXADDR} -p ${SJMXPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		if netstat -aneop | grep -q ${SJMXPORT}   ; then setpass; else setfail ;fi
+		next
+		step "     Remote JMX IP/Port (${SJMXREMOTEADDR}:${SJMXREMOTEPORT})"
+		STATE=$(nmap -O ${SJMXREMOTEADDR} -p ${SJMXREMOTEPORT} -sS 2> /dev/null | awk '/\/tcp/ {print $2}' )
+		if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		next
+		#TODO Using Test Script to test service.
+		#step "     Testing Service"
+		#if grep -q "open"<<<$STATE ; then setpass; else setfail ;fi
+		#next
+		fi
+	done
+	
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+echo "Checking Network Multicast settings"
+	logx netstat -ng	
+	step "     interfaces count >2"
+	if [ ${INTERFACECOUNT} -ge 2 ]
+	then
+		setpass
+	else
+		setfail
+		echo -en "\033[70G$INTERFACECOUNT interfaces found"
+	fi 
+	next;
+	step "     ipv4 address count >2"
+	if [ ${ADDRCOUNT} -ge 2 ]
+	then
+		setpass
+	else
+		setfail
+		echo -en "\033[70G$ADDRCOUNT ip addr found"
+	fi 
+	next;
 
 echo
+
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
 log "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
@@ -439,7 +570,6 @@ logx lscpu
 logx free -ml
 logx df -h
 logx ip a
-logx curl http://127.0.0.1:10080/system
 logx cat /proc/meminfo
 logx timedatectl
 next
@@ -448,7 +578,9 @@ step "     Network Configuration"
 logx ifconfig
 logx ifconfig -a
 logx ip a
+logx ip maddr show
 logx netstat -anope
+logx netstat -ng
 logx route
 next
 
