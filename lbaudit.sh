@@ -392,7 +392,7 @@ echo "Checking LB Properties Configuration"
 	step "     Checking JMX Hostname "
 	JMXHOST=$(awk -F"=" '/jmxHostname/ {print $2}' $PROPFILE)
 	if grep -q $JMXHOST <<<$IPADDRS ; then setpass ; else setfail ;fi
-	next
+	nyuext
 	step "     Checking JMX PORT"
 	JMXPORT=$(awk -F"=" '/jmxRemotePort/ {print $2}' $PROPFILE)
 	if netstat -aneop | grep -q ${JMXPORT}   ; then setpass; else setfail ;fi
@@ -565,9 +565,6 @@ echo "Checking Network Multicast settings"
 		echo -en "\033[70G$ADDRCOUNT ip addr found"
 	fi 
 	next;
-=======
-	
->>>>>>> origin/master
 
 echo
 
