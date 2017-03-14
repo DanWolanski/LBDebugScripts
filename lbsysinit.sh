@@ -45,39 +45,39 @@ try cd LBDebugScripts-master
 step "Setting scripts to executable"
 try chmod +x *.sh
 
-step "Disabling ipv6"
+step "Disabling ipv6 (disableipv6.sh)"
 try ./disableipv6.sh
 
-step "Disabling firewall"
+step "Disabling firewall (disablefirewall.sh)"
 try ./disablefirewall.sh
 
-step "Disabling messages rate limiting"
+step "Disabling messages rate limiting (disableratelimiting.sh)"
 try ./disableratelimiting.sh
 
 
-step "Disabling rp_filter"
+step "Disabling rp_filter (disablerpfilter.sh)"
  try ./disablerpfilter.sh
 
-step  "Disabling selinux"
+step  "Disabling selinux (disableselinux.sh)"
 try ./disableselinux.sh
 
-step  "Adding udp iptables rule"
+step  "Adding udp iptables rule" (setudprules.sh)"
 try ./setudprules.sh
 
-step "updating hosts file"
+step "updating hosts file (sethosts.sh)"
 try ./sethosts.sh
 
-step "Installing Required Packages"
+step "Installing Required Packages (installreqpackages.sh)"
 try ./installreqpackages.sh
 cat packageinstall.log >> $LOG
 
-step "Performing yum update"
+step "Performing yum update (yum update)"
 try yum -y update
 
-step "Getting latest jdk"
+step "Getting latest jdk (getjdk.sh)"
 try ./getjdk.sh
 
-step "Updating profile"
+step "Updating profile (setprofile.sh)"
 try . ./setprofile.sh
 
 
