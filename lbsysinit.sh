@@ -2,7 +2,8 @@
 # This script will add the iptables rule for udp
 #   it will also setup so it is run each time at start 
 #   by placing them in the /etc/iptables/rules.v4
-LOG=lbsysinit.log
+STARTPWD=$(pwd)
+LOG=${STARTPWD}/lbsysinit.log
 echo "Starting LBSystemInit" > $LOG
 logger -t "lbsysinit.sh" "Starting LB System Initilization via lbsysinit.sh script"
 EXITONFAIL=0
@@ -61,7 +62,7 @@ step "Disabling rp_filter (disablerpfilter.sh)"
 step  "Disabling selinux (disableselinux.sh)"
 try ./disableselinux.sh
 
-step  "Adding udp iptables rule" (setudprules.sh)"
+step  "Adding udp iptables rule (setudprules.sh)"
 try ./setudprules.sh
 
 step "updating hosts file (sethosts.sh)"
@@ -80,6 +81,7 @@ try ./getjdk.sh
 step "Updating profile (setprofile.sh)"
 try . ./setprofile.sh
 
+cd ${STARTPWD}
 
 logger -t "lbsysinit.sh" "lbsysinit.sh script Initilization complete"
 echo
