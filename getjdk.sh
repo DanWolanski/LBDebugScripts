@@ -33,9 +33,9 @@ setpass() {
 }
 step "Fetching jdk list from oracle web"
 if [ "$EXTTYPE" == "rpm" ]; then
-LATESTJDK=$(curl -s http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html | grep -oP 'http://download.oracle.com/otn-pub/java/jdk/8u.*?/jdk-8u.*?-linux-x64.rpm' | tail -1)
+LATESTJDK=$(curl -s https://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html | grep -oP 'https://download.oracle.com/otn-pub/java/jdk/8u.*?/jdk-8u.*?-linux-x64.rpm' | tail -1)
 else
-LATESTJDK=$(curl -s http://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html | grep -oP 'http://download.oracle.com/otn-pub/java/jdk/8u.*?/jdk-8u.*?-linux-x64.tar.gz' | tail -1)
+LATESTJDK=$(curl -s https://www.oracle.com/technetwork/java/javase/downloads/jdk8-downloads-2133151.html | grep -oP 'https://download.oracle.com/otn-pub/java/jdk/8u.*?/jdk-8u.*?-linux-x64.tar.gz' | tail -1)
 fi
 next
 echo "    Latest jdk detected as:" 
